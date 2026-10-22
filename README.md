@@ -160,6 +160,12 @@ TSInstallAll
 
 ### LSP-поддержка ts_ls + tsserver
 
+`typescript-language-server`  
+
+[typescript-language-server github page](https://github.com/typescript-language-server/typescript-language-server)
+
+#### Как это работает
+
 Подробнее о том, как именно работает LSP-поддержка `ts_ls + tsserver` можно узнать в  
 [Приложение 4: Как работает LSP-поддержка JavaScript/TypeScript в Neovim](#как-работает-lsp-поддержка-javascript-typescript-в-neovim)
 
@@ -181,7 +187,7 @@ M.mason = {
 :MasonInstallAll
 ```
 
-#### Настройка
+#### Активация и конфигурация
 
 Добавить в `configs/lspconfig.lua`:
 ```lua
@@ -215,11 +221,87 @@ local servers = {
 
 ### Tailwind CSS Language Server
 
+`tailwindcss-language-server`  
+
+[tailwindcss-language-server github page](https://github.com/tailwindlabs/tailwindcss-intellisense)
+
+#### Как это работает
+
+Tailwind language server определяет источник конфигурации в проекте, строит полный набор доступных классов и на этой
+основе даёт автодополнение, hover-preview css, диагностику и подсказки.
+
+В текущем Tailwind v4 источником конфигурации является css-файл, который содержит импорт `@import "tailwindcss"`.
+
+#### Установка
+
+Добавить в `chadrc.lua`:
+
+```lua
+M.mason = {
+  pkgs = {
+    ...,
+    "tailwindcss-language-server"
+}
+...
+```
+
+Выполнить:
+```
+:MasonInstallAll
+```
+
+#### Активация и конфигурация
+
+Добавить в `configs/lspconfig.lua`:
+```lua
+local servers = {
+  ...
+  tailwindcss = {},
+}
+```
+
+При обычных обстоятельствах tailwindcss-language-server не нуждается в дополнительной конфигурации.  
+Конфигурация может потребоваться только если:  
+
+- Используются нестандартные расширения файлов  
+- Tailwind не может найти входной CSS  
+- Tailwind определяет не тот конфиг и его нужно переопределить  
+
 ### ESLint
+
+
+`plugins/init.lua`:
+
+```lua
+{
+    "mfussenegger/nvim-lint",
+    enabled = true,
+    event = { "BufReadPre", "BufNewFile" },
+    config = function()
+      local lint = require("lint")
+      lint.linters_by_ft = {
+        javascript = { "eslint_d" },
+        typescript = { "eslint_d" },
+        javascriptreact = { "eslint_d" },
+        typescriptreact = { "eslint_d" },
+      }
+
+      local lint_augroup = vim.api.nvim_create_augroup("lint", { clear = true })
+      vim.api.nvim_create_autocmd({ "BufWritePost" }, {
+        group = lint_augroup,
+        callback = function()
+          lint.try_lint()
+        end,
+      })
+    end,
+},
+
+```
+
 
 ### Emmet
 
-### Форматирование с ESLint и Prettier
+### Форматирование с Prettier
 
 Prettier принимает конфигурацию из файла .prettierrc (или .prettierrc.json).
   
@@ -475,6 +557,8 @@ lazyvim: [lazyvim setup docs](https://www.lazyvim.org/)
 debugging guide: [guide to debugging in neovim](https://tamerlan.dev/a-guide-to-debugging-applications-in-neovim/)   
 lazyvim dap spec: [lazyvim dap core specification](https://www.lazyvim.org/extras/dap/core)
 
+документация tsconfig.json: [typescript-lang docs](https://www.typescriptlang.org/docs/handbook/tsconfig-json.html)
+
 ## Приложение 1: Плагины NvChad по умолчанию
 
 ### Плагины NvChad
@@ -582,7 +666,7 @@ Neovim использует эти конфигурации, а запускае
 
 `tsserver` - Это движок со своим собственным протоколом из пакета typescript, который изначально создавался для VSCode.
 Содержит компилятор и всю языковую логику: разбор кода, проверку типов, автодополнение, поиск определений, рефакторинги.  
-Пакет typescript устанавливет Mason при установке ts_ls как зависимость ts_ls.  
+Mason установит пакет typescript по умолчанию при установке ts_ls (как зависимость ts_ls).  
 Посмотреть можно здесь: `~/.local/share/nvim/mason/packages/typescript-language-server/node_modules/`.
 Поэтому локальная установка typescript в проект (например, при работе с чистым JS) не требуется.  
 
