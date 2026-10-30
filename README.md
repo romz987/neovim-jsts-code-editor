@@ -269,35 +269,95 @@ local servers = {
 
 ### ESLint
 
+Для отображения диагностики ESLint прямо в буфере Neovim нужны два основных компонента:  
 
-`plugins/init.lua`:
+- Плагин `nvim-lint`  
+- Пакет `eslint_d`  
+
+`nvim-lint`  
+
+Это асинхронный плагин линтинга для Neovim, который дополняет встроенную поддержку LSP.
+Он запускает внешние линтеры и передаёт результаты их проверки в стандартную систему диагностики Neovim (vim.diagnostic).
+
+[nvim-lint gitgub page](https://github.com/mfussenegger/nvim-lint)
+
+`eslint_d`
+
+Это демон-обёртка, устанавливаемый через Mason. Он запускает eslint в фоновом процессе и переиспользует его между проверками.  
+Eslint_d сначала ищет eslint в node_modules текущего проекта. Если локально eslint не установлен, то eslint_d будет использовать 
+встроенную версию, которая была установлена вместе с ним самим через Mason.  
+Эта встроенная версия может отставать от актуальной, поэтому рекомендуется локальная установка eslint в проект.
+
+[eslint_d gitgub page](https://github.com/mantoni/eslint_d.js/)
+
+#### Установка nvim-lint
+
+В файле `plugins/init.lua` прописать следующий конфиг:  
 
 ```lua
 {
-    "mfussenegger/nvim-lint",
-    enabled = true,
-    event = { "BufReadPre", "BufNewFile" },
-    config = function()
-      local lint = require("lint")
-      lint.linters_by_ft = {
-        javascript = { "eslint_d" },
-        typescript = { "eslint_d" },
-        javascriptreact = { "eslint_d" },
-        typescriptreact = { "eslint_d" },
-      }
+  "mfussenegger/nvim-lint",
+  event = { "BufReadPre", "BufNewFile" },
+  config = function()
+    local lint = require("lint")
 
-      local lint_augroup = vim.api.nvim_create_augroup("lint", { clear = true })
-      vim.api.nvim_create_autocmd({ "BufWritePost" }, {
-        group = lint_augroup,
-        callback = function()
-          lint.try_lint()
-        end,
-      })
-    end,
-},
+    -- Привязываем жизненный цикл демона eslint_d к процессу Neovim.
+    -- Когда Neovim закрывается, демон завершается вместе с ним,
+    -- а не висит в фоне до истечения idle-таймаута.
+    vim.env.ESLINT_D_PPID = vim.fn.getpid()
 
+    -- Здесь укажем какой линтер для какого типа файлов запускать
+    lint.linters_by_ft = {
+      javascript = { "eslint_d" },
+      typescript = { "eslint_d" },
+      javascriptreact = { "eslint_d" },
+      typescriptreact = { "eslint_d" },
+    }
+
+    local lint_augroup = vim.api.nvim_create_augroup("nvim_lint", { clear = true })
+
+    -- Запуск линтера после сохранения файла.
+    vim.api.nvim_create_autocmd({ "BufWritePost" }, {
+      group = lint_augroup,
+      callback = function()
+        lint.try_lint()
+      end,
+    })
+  end,
+}
 ```
 
+После перезапуска Neovim плагин будет установлен автоматически.
+
+#### Установка eslint_d
+
+Добавить в `chadrc.lua`:
+
+```lua
+M.mason = {
+  pkgs = {
+    ...,
+    "eslint_d"
+}
+...
+```
+
+Выполнить:
+```
+:MasonInstallAll
+```
+
+#### Работа с линтером
+
+Для корректной работы линтера потребуется установить локально пакеты `eslint`, `@eslint/js` и `globals`:
+
+```bash
+npm install --save-dev eslint @eslint/js globals
+```
+
+После установки пакетов и добавления файла конфигурации для линтера в проект линтинг должен заработать.  
+Важно помнить, что `nvim-lint` отправляет сообщения в vim.diagnostic, поэтому они не будут доступны в Noice, например, что затрудняет копирование этих сообщений,
+но всегда можно выполнить рядом в консоли `eslint_d <filename.js>`.
 
 ### Emmet
 
