@@ -342,7 +342,54 @@ M.mason = {
 
 ### Emmet
 
+Для полноценной работы с возможностями Emmet потребуются два основных компонента:
 
+[emmet_language_server]() - это lsp-сервер, который предоставляет автодополнение сокращений (div>p, div*2, etc).  
+
+[nvim-emmet]() - это плагин, который добавляет функцию "обернуть выделенный текст в тег", дополняя lsp-сервер. 
+
+#### Установка emmet_language_server
+
+Устанавливается через Mason.  
+
+Добавить в `chadrc.lua`:
+
+```lua
+M.mason = {
+  pkgs = {
+    ...,
+    "emmet-language-server"
+}
+...
+```
+
+Выполнить:
+```
+:MasonInstallAll
+```
+
+#### Установка nvim-emmet
+
+В файл `plugins/init.lua` добавить следующий конфиг:  
+
+```lua
+{
+"olrtg/nvim-emmet",
+enabled = true,
+ft = {
+  "html",
+  "javascript",
+  "javascriptreact",
+  "typescript",
+  "typescriptreact",
+},
+config = function()
+  vim.keymap.set({ "n", "v" }, '<leader>me', require('nvim-emmet').wrap_with_abbreviation)
+end
+},
+```
+
+После перезапуска neovim плагин будет установлен автоматически.
 
 ### Форматирование с Prettier
 
@@ -358,7 +405,7 @@ M.mason = {
 
 #### Установка Prettier
 
-Prettier устанавливается через Mason.
+Устанавливается через Mason.
 
 Добавить в `chadrc.lua`:
 
