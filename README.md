@@ -568,6 +568,7 @@ return {
 
 `json-lsp`
 
+Это LSP-сервер для JSON в Neovim, который обеспечивает автодополнение, проверку синтаксиса и валидацию по схеме .
 
 [json-lsp github page](https://github.com/microsoft/vscode-json-languageservice)
 
