@@ -25,7 +25,7 @@
     - [Tailwind CSS Language Server](#tailwind-css-language-server)
     - [ESLint](#eslint)
     - [Emmet](#emmet)
-    - [Форматирование с ESLint и Prettier](#форматирование-с-eslint-и-prettier)
+    - [Форматирование с Prettier](#форматирование-с-и-prettier)
 - [Часть 3: Кастомные сниппеты](#часть-3-кастомные-сниппеты)
 - [Часть 4: Установка и настройка дополнительных инструментов](#часть-3-установка-и-настройка-дополнительных-инструментов)
     - [Список дополнительных плагинов](#список-дополнительных-плагинов)
@@ -342,9 +342,61 @@ M.mason = {
 
 ### Emmet
 
+
+
 ### Форматирование с Prettier
 
-Prettier принимает конфигурацию из файла .prettierrc (или .prettierrc.json).
+Для форматирования кода потребуются два основных компонента:  
+
+1. Prettier
+2. Conform
+3. Конфигурационный файл для Prettier
+
+[Prettier]() - Это внешний инструмент для форматирования кода, который подключается через плагины-мосты и приводит код к единому стилю по заданным правилам.  
+
+[Conform]() - Это плагин для управления внешними инструментами форматирования - как раз тот самый плагин-мост, который будет управлять Prettier.  
+
+#### Установка Prettier
+
+Prettier устанавливается через Mason.
+
+Добавить в `chadrc.lua`:
+
+```lua
+M.mason = {
+  pkgs = {
+    ...,
+    "prettier"
+}
+...
+```
+
+Выполнить:
+```
+:MasonInstallAll
+```
+
+#### Настройка Conform
+
+`Conform` предустановлен в NvChad.  
+Для того, чтобы он использовал Prettier для форматирования JavaScript и TypeScript файлов в `configs/conform.lua` необходимо добавить следующее:  
+
+```lua
+local options = {
+  formatters_by_ft = {
+    ...
+    javascript = { "prettier" },
+    javascriptreact = { "prettier" },
+    typescript = { "prettier" },
+    typescriptreact = { "prettier" },
+  },
+ ...
+}
+```
+
+#### Конфигурационный файл для Prettier
+
+Prettier принимает конфигурацию из файла .prettierrc (или .prettierrc.json) в корне проекта.  
   
 Пример конфигурации:  
 ```json
@@ -467,6 +519,11 @@ return {
 
 ### Список дополнительных инструментов
 
+`json-lsp`
+
+
+[json-lsp github page](https://github.com/microsoft/vscode-json-languageservice)
+
 `taplo`  
 
 Инструмент для комфортной работы с `*.toml` файлами.  
@@ -506,12 +563,12 @@ return {
 M.mason = {
   pkgs = {
       ...
-    "yaml-language-server",
+    "json-lsp",
     "taplo",
+    "yaml-language-server",
     "docker-language-server",
     "dockerfmt",
   }
-
 ```
 
 Добавить в `configs/lspconfig.lua`:
@@ -520,6 +577,7 @@ require("nvchad.configs.lspconfig").defaults()
 
 local servers = {
     ...
+  jsonls = {},
   yamlls = {
     filetypes = { "yaml", "yaml.docker-compose" },
   },
