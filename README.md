@@ -46,7 +46,7 @@
 
 ## Часть 1: Установка и настройка NvChad
 
-Происходит в соответствии с официальной документацией NvChad.
+Первичная установка NvChad происходит в соответствии с [официальной документацией](https://nvchad.com/docs/quickstart/install).
 
 ### Установка NvChad
 
@@ -65,6 +65,7 @@ git clone https://github.com/NvChad/starter ~/.config/nvim && nvim
 
 ### Структура файлов NvChad
 
+После установки файлы NvChad будут распределены по нескольким директориям:  
 
 | Директория | Назначение |
 |---|---|
@@ -72,6 +73,7 @@ git clone https://github.com/NvChad/starter ~/.config/nvim && nvim
 | `~/.local/share/nvim/` | Установленные плагины (Lazy, Mason) |
 | `~/.local/state/nvim/` | Файлы состояния: история, undo, swap, логи |
 
+В рамках этого руководства мы будем работать только с файлами конфигурации, расположенными в `~/.config/nvim/`.
 
 ### Конфигурируем NvChad
 
@@ -86,7 +88,7 @@ git clone https://github.com/NvChad/starter ~/.config/nvim && nvim
 
 - Цветовая схема (раздел base46)
 - Элементы пользовательского интерфейса:
-    - Стиль окна автодополнения (cmp)
+    - Стиль окна автодополнения
     - Стиль Telescope
     - Стиль statusline
     - Стиль tabufline
@@ -374,18 +376,18 @@ M.mason = {
 
 ```lua
 {
-"olrtg/nvim-emmet",
-enabled = true,
-ft = {
-  "html",
-  "javascript",
-  "javascriptreact",
-  "typescript",
-  "typescriptreact",
-},
-config = function()
-  vim.keymap.set({ "n", "v" }, '<leader>me', require('nvim-emmet').wrap_with_abbreviation)
-end
+    "olrtg/nvim-emmet",
+    enabled = true,
+    ft = {
+      "html",
+      "javascript",
+      "javascriptreact",
+      "typescript",
+      "typescriptreact",
+    },
+    config = function()
+      vim.keymap.set({ "n", "v" }, '<leader>me', require('nvim-emmet').wrap_with_abbreviation)
+    end
 },
 ```
 
@@ -649,7 +651,7 @@ return {
         "",
         "",
       )}}]],
-    { i(1, "general") }
+    { i(1, "general") }, { strict = false }
   )),
 }
 ```
