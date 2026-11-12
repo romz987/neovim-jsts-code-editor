@@ -548,8 +548,291 @@ local options = {
 ## Часть 4: Установка и настройка отладчика
 
 Для отладки JavaScript и TypeScript кода в Neovim будем использовать js-debug-adapter.  
-Это официальный и самый продвинутый отладчик от Microsoft (тот же самый, что используется по умолчанию в VS Code).  
+Это официальный и самый продвинутый отладчик от Microsoft (тот же самый, что используется по умолчанию в VSCode).  
 Он поддерживает отладку как серверного кода (Node.js), так и фронтенда (в связке с браузером), а также отлично работает с TypeScript без предварительной ручной компиляции.
+
+Для работы отладки JavaScript / TypeScript кода в Neovim требуются два основных компонента:
+- nvim-dap с дополнительными зависимостями
+- js-debug-adapter
+
+`nvim-dap`
+Это DAP-клиент, устанавливаемый как Neovim плагин через Lazy. 
+Сам nvim-dap это не отладчик, а "оператор", который управляет сторонними отладчиками (адаптерами) используя протокол DAP и передаёт Neovim данные для отображения (брейкпоинты, стек, переменные, etc). 
+Отображением информации занимаются встроенные механизмы Neovim и UI-плагины, устанавливаемые в качестве зависимостей (см. Дополнительные зависимости).
+
+`js-debug-adapter` 
+Это официальный и самый продвинутый отладчик (адаптер) от Microsoft. Она устанавливается через Mason и управляет реальным отладчиком. 
+Сам отладчик это встроенный в NodeJS V8 Inspector - отладочный движок, который предоставляет CDP (Chrome DevTools Protocol). 
+Адаптер js-debug-adapter переводит DAP <-> CDP.
+
+js-debug-adapter поддерживает два сценария отладки:  
+- Отладка серверного кода (Node.js/SSR)  
+- Отладка клиентского кода (который работает в браузере)  
+Для каждого сценария необходимо создать собственную конфигурацию.  
+
+### Установка js-debug-adapter
+
+Устанавливается через Mason.  
+
+Добавить в `chadrc.lua`:
+
+```lua
+M.mason = {
+  pkgs = {
+    ...,
+    "js-debug-adapter"
+}
+...
+```
+
+Выполнить:
+```
+:MasonInstallAll
+```
+
+### Установка и конфигурация nvim-dap
+
+Для комфортной работы с nvim-dap в Neovim потребуется установить nvim-dap со следующими зависимостями:  
+
+`nvim-dap-ui`  
+Графический интерфейс для nvim-dap: панели со стеком вызовов, переменными, точками останова, консолью (REPL) и т.д.  
+
+`nvim-dap-virtual-text`  
+Показывает значения переменных прямо рядом с кодом, используя тот же механизм virtual text (extmarks), что и подсказки LSP-сервера.  
+
+`nvim-nio`
+Библиотека для асинхронного ввода-вывода, зависимость nvim-dap-ui.
+
+Сначала создадим файл конфигурации для nvim-dap, в котором настроим используемые горячие клавиши.  
+
+`plugins/nvim-dap/nvim-dap-keys.lua`:  
+
+```lua
+local M = {}
+
+M.keys = {
+    -- Установить условный breakpoint (с выражением)
+    { "<leader>dB", function() require("dap").set_breakpoint(vim.fn.input('Breakpoint condition: ')) end, desc = "Breakpoint Condition" },
+    -- Включить / выключить обычный breakpoint
+    { "<leader>db", function() require("dap").toggle_breakpoint() end, desc = "Toggle Breakpoint" },
+    -- Запустить или продолжить выполнение программы
+    { "<leader>dc", function() require("dap").continue() end, desc = "Run/Continue" },
+    -- Запустить с аргументами (пользовательская функция `get_args` должна быть определена где-то в конфиге)
+    -- { "<leader>da", function() require("dap").continue({ before = get_args }) end, desc = "Run with Args" },
+    -- Запустить до курсора
+    { "<leader>dC", function() require("dap").run_to_cursor() end, desc = "Run to Cursor" },
+    -- Перейти к строке (без выполнения)
+    { "<leader>dg", function() require("dap").goto_() end, desc = "Go to Line (No Execute)" },
+    -- Шаг внутрь (step into)
+    { "<leader>di", function() require("dap").step_into() end, desc = "Step Into" },
+    -- Переместиться вниз по call stack
+    { "<leader>dj", function() require("dap").down() end, desc = "Down" },
+    -- Переместиться вверх по call stack
+    { "<leader>dk", function() require("dap").up() end, desc = "Up" },
+    -- Запустить последний запуск
+    { "<leader>dl", function() require("dap").run_last() end, desc = "Run Last" },
+    -- Шаг наружу (step out)
+    { "<leader>do", function() require("dap").step_out() end, desc = "Step Out" },
+    -- Шаг через (step over)
+    { "<leader>dO", function() require("dap").step_over() end, desc = "Step Over" },
+    -- Поставить выполнение на паузу
+    { "<leader>dP", function() require("dap").pause() end, desc = "Pause" },
+    -- Включить/выключить REPL (интерактивная консоль)
+    { "<leader>dr", function() require("dap").repl.toggle() end, desc = "Toggle REPL" },
+    -- Показать информацию о текущей отладочной сессии
+    { "<leader>ds", function() require("dap").session() end, desc = "Session" },
+    -- Завершить отладочную сессию
+    { "<leader>dt", function() require("dap").terminate() end, desc = "Terminate" },
+    -- Открыть всплывающее окно с информацией (переменные и т.п.)
+    { "<leader>dw", function() require("dap.ui.widgets").hover() end, desc = "Widgets" },
+}
+
+return M
+```
+
+Создадим файл конфигурации для nvim-dap-ui.
+
+`plugins/nvim-dap-ui/nvim-dap-ui-config.lua`:
+
+```lua
+local m = {}
+
+function m.setup(opts)
+    local dap = require("dap")
+
+    -- подключаем и настраиваем nvim-dap-ui с переданными опциями (opts из lazy plugin config).
+    local dapui = require("dapui")
+    dapui.setup(opts)
+    
+    -- автоматически открываем ui, когда начинается сессия отладки (event_initialized).
+    dap.listeners.after.event_initialized["dapui_config"] = function()
+        dapui.open({})
+    end
+    dap.listeners.before.event_terminated["dapui_config"] = function()
+        dapui.close({})
+    end
+    -- закрывает ui, когда отладка завершена (event_terminated) или пользователь вышел (event_exited).
+    dap.listeners.before.event_exited["dapui_config"] = function()
+        dapui.close({})
+    end
+
+    -- стиль точки останова
+    -- определение знака для точки останова
+    vim.fn.sign_define('DapBreakpoint', {text='⬤', texthl='DapBreakpoint', linehl='', numhl=''})
+    -- определение цветовой группы для точки останова
+    vim.cmd('highlight DapBreakpoint guifg=#ff0000 ctermfg=red')
+end
+
+return m
+```
+
+Теперь создадим файл конфигурации для nvim-dap-ui, в котором настроим используемые горячие клавиши.
+
+`plugins/nvim-dap-ui/nvim-dap-ui-keys.lua`:  
+
+```lua
+local M = {}
+
+M.keys = {
+    -- открыть/закрыть интерфейс отладки (панели переменных, стек вызовов и т.д.)
+    { "<leader>du", function() require("dapui").toggle({ }) end, desc = "Dap UI" },
+    -- выполнить команду "eval" (вывод значения переменной под курсором)
+    { "<leader>de", function() require("dapui").eval() end, desc = "Eval", mode = {"n", "v"} },
+}
+
+return M
+```
+
+Чтобы установить nvim-dap со всеми зависимостями добавим в `plugins/init.lua`:
+
+```lua
+{
+    "mfussenegger/nvim-dap",
+    ft = { "javascript", "typescript", "javascriptreact", "typescriptreact" },
+    dependencies = {
+
+      -- плагин для и его конфигурации
+      {
+        "rcarriga/nvim-dap-ui",
+        opts = {},
+        -- [конфигурация nvim-dap-ui]: горячие клавиши для nvim-dap-ui
+        keys = require("plugins.nvim-dap.nvim-dap-ui.nvim-dap-ui-keys").keys,
+        dependencies = { "nvim-neotest/nvim-nio" },
+        config = function (_, opts)
+          -- [конфигурация nvim-dap-ui]: 
+          require("plugins.nvim-dap.nvim-dap-ui.nvim-dap-ui-config").setup(opts)
+        end,
+      },
+      -- плагин для отображения значения переменных прямо в коде
+      {
+        "theHamsta/nvim-dap-virtual-text",
+        opts = {},
+      },
+    },
+
+    -- [конфигурация nvim-dap]: hotkeys для управления отладкой 
+    keys = require("plugins.nvim-dap.nvim-dap-keys").keys,
+
+    -- [конфигурация nvim-dap]
+    config = function ()
+      -- подсветка строки, где выполнение остановилось
+      vim.api.nvim_set_hl(0, "DapStoppedLine", { default = true, link = "Visual" })
+      -- setup dap config by VsCode launch.json file
+      local vscode = require("dap.ext.vscode")
+      local json = require("plenary.json")
+      -- DAP читает launch.json с помощью plenary
+      vscode.json_decode = function(str)
+        return vim.json.decode(json.json_strip_comments(str))
+      end
+
+    end,
+},
+```
+
+### Конфигурация для отладки серверного кода
+
+Мы будем конфигурировать nvim-dap вручную.  
+
+Основным шагом в процессе конфигурации является указание пути к исполняемому файлу js-debug-adapter. 
+Согласно официальной документации js-debug-adapter содержит два исполняемых файла:
+- dapDebugServer.js - этот файл используется для работы с Neovim  
+- vsDebugServer.js - используется только с VSCode.  
+
+Мы вынесем конфигурацию в файл `plugins/nvim-dap/nvim-dap-jsdebug.lua` и в дальнешем покдлючим его к nvim-dap в `plugins/init.lua`.  
+
+Конфигурация `nvim-dap-jsdebug.lua`:  
+
+```lua
+local dap = require("dap")
+
+-- 1. Регистрируем адаптер с именем "pwa-node" в таблице адаптеров nvim-dap
+dap.adapters["pwa-node"] = {
+    -- Тип подключения: nvim-dap будет запускать адаптер как сервер и подключаться к нему
+    type = "server",
+    -- Хост, на котором слушает сервер адаптера
+    host = "::1",                       
+    -- Порт: "${port}" означает, что nvim-dap сам выберет свободный порт и подставит его
+    port = "${port}",                         
+    -- Описание исполняемого файла, который нужно запустить
+    executable = {
+        -- Команда для запуска: интерпретатор Node.js (адаптер написан на JS)
+        command = "node",                     
+        -- Аргументы: путь к dapDebugServer.js и тот же порт
+        args = {
+            vim.fn.stdpath("data") .. "/mason/packages/js-debug-adapter/js-debug/src/dapDebugServer.js",
+            "${port}"
+        },
+    }
+}
+
+-- 2. Конфигурации запуска для JS/TS
+dap.configurations.javascript = {
+    {
+        type = "pwa-node",
+        request = "launch",
+        name = "Launch current file",
+        program = "${file}",
+        cwd = "${workspaceFolder}",
+        console = "integratedTerminal",
+    },
+}
+
+-- Дублируем те же конфигурации для TypeScript и React
+dap.configurations.typescript = dap.configurations.javascript
+dap.configurations.javascriptreact = dap.configurations.javascript
+dap.configurations.typescriptreact = dap.configurations.javascript
+```
+
+Для подключения файла добавим cоответсвующую строку в файл `plugins/init.lua`:
+
+```lua
+{
+    "mfussenegger/nvim-dap",
+
+
+    -- [Текущий конфиг]
+    ...
+
+
+    -- [конфигурация nvim-dap]
+    config = function ()
+      -- подсветка строки, где выполнение остановилось
+      vim.api.nvim_set_hl(0, "DapStoppedLine", { default = true, link = "Visual" })
+      -- setup dap config by VsCode launch.json file
+      local vscode = require("dap.ext.vscode")
+      local json = require("plenary.json")
+      -- DAP читает launch.json с помощью plenary
+      vscode.json_decode = function(str)
+        return vim.json.decode(json.json_strip_comments(str))
+      end
+
+      -- <НОВАЯ СТРОКА> ЗДЕСЬ ПОДКЛЮЧАЕМ ФАЙЛ КОНФИГУРАЦИИ
+      -- [конфигурация nvim-dap]: подключаем конфигурацию для JS/TS (js-debug-adapter)
+      require("plugins.nvim-dap.nvim-dap-jsdebug")
+    end,
+},
+```
+
 
 ## Часть 5: Настройка pre-commit pipeline
 
@@ -812,8 +1095,9 @@ dotfyle - discover neovim plugins: [dotfyle](https://dotfyle.com/)
 lazy: [lazy plugin manager docs](https://lazy.folke.io/)  
 lazyvim: [lazyvim setup docs](https://www.lazyvim.org/)  
 
+debug adapter docs: [nvim-dap javascript documentation](https://codeberg.org/mfussenegger/nvim-dap/wiki/Debug-Adapter-installation#javascript)  
 debugging guide: [guide to debugging in neovim](https://tamerlan.dev/a-guide-to-debugging-applications-in-neovim/)   
-lazyvim dap spec: [lazyvim dap core specification](https://www.lazyvim.org/extras/dap/core)
+lazyvim dap spec: [lazyvim dap core specification](https://www.lazyvim.org/extras/dap/core)  
 
 документация tsconfig.json: [typescript-lang docs](https://www.typescriptlang.org/docs/handbook/tsconfig-json.html)
 
@@ -916,6 +1200,8 @@ LSP-сервер может поддерживать автодополнени�
 Писать это вручную для каждого сервера неудобно, поэтому используется плагин nvim-lspconfig — он не запускает серверы сам, а просто хранит готовые конфигурации для множества известных LSP-серверов и документацию по ним.  
 Neovim использует эти конфигурации, а запускает и поддерживает соединение с сервером уже сам, силами встроенного LSP-клиента.
 
+![Как работает lsp](./lsp.svg)
+
 ## Приложение 4: Как работает LSP-поддержка JavaScript / TypeScript в Neovim
 
 ### Как это работает
@@ -1010,35 +1296,11 @@ Mason установит пакет typescript по умолчанию при у
 Остальные возможности LSP — диагностика, переход к определению, hover-подсказки и подобное — nvim-cmp не касаются.  
 Их встроенный LSP-клиент реализует сам, напрямую через Neovim API (vim.lsp.buf.*, знаки на полях, floating-окна, quickfix-список), без участия сторонних плагинов автодополнения.
 
+![Как работает автодополнение](./autocmp.svg)
+
 ## Приложение 6: Как работает отладка
 
-### Протокол DAP
-
-DAP (Debug Adapter Protocol) - это спецификация, описывающая формат общения между клиентом-редактором и отладчиком (точнее — debug-адаптером, программой-посредником, которая говорит на DAP и управляет реальным отладчиком под капотом).
-
-В отличие от LSP, поддержка DAP не встроена в Neovim: своего DAP-клиента у редактора нет.  
-Эту роль берёт на себя плагин nvim-dap — он реализует протокол DAP и выступает клиентом для Neovim.
-
-### Как это работает на примере Python
-
-Сам процесс отладки Python-кода ведёт программа debugpy — она выступает debug-адаптером, то есть той стороной, которая понимает DAP-команды от nvim-dap и превращает их в реальные действия над отлаживаемым процессом.  
-Схема:  
-*Neovim (nvim-dap) → по протоколу DAP → debugpy (debug-адаптер) → управляет → отлаживаемый Python-процесс*  
-
-1. Neovim через nvim-dap отправляет debugpy команды: поставить точку останова, начать выполнение, сделать шаг и так далее.  
-2. Debugpy запускает отлаживаемый файл нужным интерпретатором Python — это не обязательно системный интерпретатор, часто указывают путь к интерпретатору из virtualenv/venv.  
-3. Управляет самим выполнением программы (установка точек останова, пошаговое выполнение, чтение состояния переменных) debugpy не напрямую, а через встроенную в него библиотеку pydevd — именно она вклинивается в выполнение Python-кода на низком уровне.  
-4.  Результаты (текущая строка, стек вызовов, значения переменных) идут в обратном направлении: pydevd → debugpy → nvim-dap → Neovim.  
-
-### Дополнительные зависимости
-
-Сам nvim-dap отвечает только за протокол и базовое управление сессией — у него нет ни готового интерфейса, ни настроек под конкретные языки «из коробки».  
-Поэтому в связке с ним используют плагины-надстройки:  
-
-- nvim-dap-ui — графический интерфейс для nvim-dap: панели со стеком вызовов, переменными, точками останова, консолью (REPL) и т.д.  
-- nvim-dap-virtual-text — показывает значения переменных прямо рядом с кодом, используя тот же механизм virtual text (extmarks), что и подсказки LSP-сервера.  
-- nvim-nio — библиотека для асинхронного ввода-вывода, зависимость nvim-dap-ui.  
-- nvim-dap-python — берёт на себя настройку nvim-dap специально под debugpy: не нужно вручную прописывать adapter и configuration для Python.  
+![Как работает отладка](./jsdebug.svg)
 
 ## Tips and tricks
 
